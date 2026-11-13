@@ -1,0 +1,1136 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>スマホ最新用語かるた - オンラインプレイ</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts: Zen Maru Gothic & Shippori Mincho -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@600;800&family=Zen+Maru+Gothic:wght@500;700;900&display=swap" rel="stylesheet">
+
+  <style>
+    body {
+      font-family: 'Zen Maru Gothic', sans-serif;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: manipulation;
+    }
+    .font-mincho {
+      font-family: 'Shippori Mincho', serif;
+    }
+
+    /* かるた札の立体感とホバー・アクティブ効果 */
+    .karuta-card {
+      transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.05);
+      aspect-ratio: 1 / 1.42;
+    }
+    .karuta-card:not(.card-taken):hover {
+      transform: translateY(-4px) scale(1.02);
+      box-shadow: 0 10px 20px rgba(124, 58, 237, 0.18), 0 4px 8px rgba(0, 0, 0, 0.06);
+    }
+    .karuta-card:not(.card-taken):active {
+      transform: translateY(1px) scale(0.98);
+    }
+    .card-taken {
+      opacity: 0.18;
+      filter: grayscale(85%);
+      pointer-events: none;
+      transform: scale(0.95);
+      transition: all 0.4s ease;
+    }
+
+    /* 正解・お手つきアニメーション */
+    @keyframes flashCorrect {
+      0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7); }
+      50% { transform: scale(1.08); box-shadow: 0 0 0 16px rgba(34, 197, 94, 0); }
+      100% { transform: scale(1); }
+    }
+    @keyframes shakeWrong {
+      0%, 100% { transform: translateX(0); }
+      20%, 60% { transform: translateX(-8px); }
+      40%, 80% { transform: translateX(8px); }
+    }
+    .card-correct {
+      animation: flashCorrect 0.6s ease;
+      border-color: #22c55e !important;
+      background-color: #f0fdf4 !important;
+    }
+    .card-wrong {
+      animation: shakeWrong 0.4s ease;
+      border-color: #ef4444 !important;
+      background-color: #fef2f2 !important;
+    }
+    .card-cpu-take {
+      border-color: #f97316 !important;
+      background-color: #fff7ed !important;
+      animation: shakeWrong 0.5s ease;
+    }
+
+    /* スクロールバーのカスタマイズ */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 9999px;
+    }
+  </style>
+</head>
+<body class="bg-amber-50/40 text-slate-800 min-h-screen flex flex-col justify-between selection:bg-purple-200">
+
+  <!-- ================= TOP HEADER BAR ================= -->
+  <header class="bg-white/90 backdrop-blur-md border-b border-purple-100 shadow-sm sticky top-0 z-40 px-3 py-2.5 sm:px-6">
+    <div class="max-w-6xl mx-auto flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <span class="w-8 h-8 rounded-full bg-gradient-to-tr from-purple-600 to-indigo-500 text-white font-black flex items-center justify-center text-lg shadow-sm">か</span>
+        <h1 class="text-base sm:text-xl font-bold tracking-tight text-slate-800">
+          スマホ最新用語<span class="text-purple-600">かるた</span>
+        </h1>
+      </div>
+
+      <div class="flex items-center gap-2 sm:gap-3">
+        <!-- 音声ON/OFF切り替え -->
+        <button id="toggle-voice-btn" class="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs sm:text-sm font-bold border border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100 transition shadow-sm" title="合成音声の読み上げ切り替え">
+          <span id="voice-icon">🔊</span>
+          <span id="voice-label" class="hidden sm:inline">音声 ON</span>
+        </button>
+
+        <!-- 効果音ON/OFF -->
+        <button id="toggle-se-btn" class="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs sm:text-sm font-bold border border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100 transition shadow-sm" title="効果音の切り替え">
+          <span id="se-icon">🔔</span>
+          <span id="se-label" class="hidden sm:inline">SE ON</span>
+        </button>
+
+        <!-- メニュー・リセット -->
+        <button id="header-menu-btn" class="px-3 py-1.5 rounded-full text-xs sm:text-sm font-bold bg-slate-800 text-white hover:bg-slate-700 transition shadow-sm">
+          タイトルへ
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ================= MAIN CONTENT CONTAINER ================= -->
+  <main class="max-w-6xl mx-auto w-full px-2 sm:px-4 py-3 flex-1 flex flex-col">
+
+    <!-- 1. 【タイトル画面 / モード選択】 -->
+    <section id="screen-title" class="flex-1 flex flex-col items-center justify-center py-6 text-center">
+      <div class="inline-block bg-purple-100 text-purple-800 font-bold px-4 py-1.5 rounded-full text-xs sm:text-sm mb-3">
+        ✨ 現代の必須スマホ用語20選をかるたでマスター！
+      </div>
+      
+      <h2 class="text-3xl sm:text-5xl font-black text-slate-800 mb-3 tracking-tight font-mincho">
+        電脳 <span class="text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-indigo-600">スマホかるた</span>
+      </h2>
+      <p class="text-sm sm:text-base text-slate-600 max-w-lg mb-8 leading-relaxed">
+        読み手が居なくても大丈夫！音声読み上げに合わせて、机に散らばった札から正しいスマホ用語を素早くタップしよう。
+      </p>
+
+      <!-- モード選択カード -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full max-w-xl mb-6">
+        <!-- ひとりで挑戦 -->
+        <button id="start-solo-btn" class="group relative bg-white p-5 rounded-2xl border-2 border-purple-200 hover:border-purple-500 shadow-md hover:shadow-xl transition-all text-left flex flex-col justify-between">
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-3xl p-2.5 rounded-xl bg-purple-50 group-hover:bg-purple-100 transition">⏱️</span>
+            <span class="text-xs font-bold text-purple-700 bg-purple-100 px-2.5 py-1 rounded-full">一人用</span>
+          </div>
+          <div>
+            <h3 class="text-lg font-bold text-slate-800 mb-1 group-hover:text-purple-600 transition">ひとりでタイムアタック</h3>
+            <p class="text-xs text-slate-500">20首すべてを取り終えるまでのタイムと正確さを競います。自分のペースで練習したい方にも！</p>
+          </div>
+          <div class="mt-4 text-xs font-bold text-purple-600 flex items-center gap-1">
+            スタートする <span class="transition transform group-hover:translate-x-1">→</span>
+          </div>
+        </button>
+
+        <!-- CPU対戦 -->
+        <div class="bg-white p-5 rounded-2xl border-2 border-indigo-200 shadow-md flex flex-col justify-between">
+          <div>
+            <div class="flex items-center justify-between mb-3">
+              <span class="text-3xl p-2.5 rounded-xl bg-indigo-50">🤖</span>
+              <span class="text-xs font-bold text-indigo-700 bg-indigo-100 px-2.5 py-1 rounded-full">対戦</span>
+            </div>
+            <h3 class="text-lg font-bold text-slate-800 mb-1">CPUと対戦する</h3>
+            <p class="text-xs text-slate-500 mb-3">相手のCPUより先に札を奪おう！難易度を選んで挑戦してください。</p>
+          </div>
+          
+          <div class="grid grid-cols-3 gap-1.5 pt-2 border-t border-slate-100">
+            <button class="cpu-start-btn py-2 px-1 text-xs font-bold rounded-lg bg-indigo-50 text-indigo-700 hover:bg-indigo-600 hover:text-white transition" data-diff="easy">
+              かんたん
+            </button>
+            <button class="cpu-start-btn py-2 px-1 text-xs font-bold rounded-lg bg-indigo-50 text-indigo-700 hover:bg-indigo-600 hover:text-white transition" data-diff="normal">
+              ふつう
+            </button>
+            <button class="cpu-start-btn py-2 px-1 text-xs font-bold rounded-lg bg-indigo-50 text-indigo-700 hover:bg-indigo-600 hover:text-white transition" data-diff="hard">
+              たつじん 🔥
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 用語一覧・図鑑ボタン -->
+      <button id="open-dict-btn" class="text-xs sm:text-sm font-bold text-slate-600 hover:text-purple-600 underline underline-offset-4 flex items-center gap-1 transition">
+        📖 収録されている20の用語と読み札をあらかじめ確認する
+      </button>
+    </section>
+
+    <!-- 2. 【ゲーム対戦・プレイ画面】 -->
+    <section id="screen-game" class="hidden flex-1 flex flex-col gap-3">
+      
+      <!-- ステータスバー（残り枚数・得点・タイマー） -->
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-2 sm:p-3 flex items-center justify-between text-xs sm:text-sm">
+        <div class="flex items-center gap-3">
+          <div class="bg-purple-50 text-purple-900 px-2.5 py-1 rounded-lg font-bold border border-purple-200">
+            残り <span id="stat-remain" class="text-base text-purple-600 font-black">20</span> / 20 枚
+          </div>
+          <div id="stat-score-wrap" class="hidden sm:flex items-center gap-2">
+            <span class="text-slate-500">獲得:</span>
+            <span id="stat-player-score" class="font-black text-slate-800 text-sm">あなた 0枚</span>
+            <span id="stat-cpu-score" class="font-black text-orange-600 text-sm hidden">/ CPU 0枚</span>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2 sm:gap-4">
+          <div class="font-mono text-sm sm:text-base font-bold bg-slate-100 text-slate-700 px-2.5 py-0.5 rounded-md" id="stat-timer">
+            00:00.0
+          </div>
+          <button id="repeat-voice-btn" class="flex items-center gap-1 bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs px-2.5 py-1.5 rounded-lg shadow-sm transition active:scale-95" title="もう一度読み上げる">
+            <span>🔄</span> <span class="hidden sm:inline">もう一度読む</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 読み札掲示板（スクリーン中央上部に大きく表示） -->
+      <div class="bg-gradient-to-r from-teal-900 via-teal-800 to-emerald-900 text-teal-50 rounded-2xl p-4 sm:p-5 shadow-lg relative overflow-hidden border-2 border-teal-600/50">
+        <!-- 背景の和風装飾文字 -->
+        <span class="absolute -right-4 -bottom-6 text-7xl sm:text-8xl font-black text-teal-800/40 select-none font-mincho">札</span>
+        
+        <div class="relative z-10 flex flex-col items-center text-center">
+          <div class="flex items-center gap-2 mb-1.5">
+            <span class="inline-block w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping"></span>
+            <span class="text-xs uppercase tracking-wider text-emerald-300 font-bold">ただいまの読み札</span>
+            <span id="yomi-initial-badge" class="ml-2 w-7 h-7 rounded-full bg-amber-400 text-teal-950 font-black flex items-center justify-center text-sm shadow">
+              ？
+            </span>
+          </div>
+
+          <!-- 読み札五・七・五（リアルタイム表示） -->
+          <div id="yomi-text" class="text-lg sm:text-2xl font-bold tracking-wide text-white min-h-[2.4rem] flex items-center justify-center font-mincho">
+            「かるたの準備中...」
+          </div>
+
+          <!-- 読み上げプログレスバー -->
+          <div class="w-full max-w-md bg-teal-950/60 h-1.5 rounded-full mt-3 overflow-hidden">
+            <div id="yomi-progress" class="bg-gradient-to-r from-amber-300 to-emerald-400 h-full w-0 transition-all duration-300"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- メッセージトースト（お手つき・正解・CPU奪取など） -->
+      <div id="game-message" class="h-6 text-center text-xs sm:text-sm font-bold text-purple-800 transition-opacity opacity-0 flex items-center justify-center gap-1">
+        <span>お知らせ</span>
+      </div>
+
+      <!-- 取り札フィールド（グリッド表示） -->
+      <div class="flex-1 bg-amber-100/40 border border-amber-200/80 rounded-2xl p-2.5 sm:p-4 overflow-y-auto">
+        <div id="board-grid" class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2 sm:gap-3.5">
+          <!-- JSで20枚の札を動的配置 -->
+        </div>
+      </div>
+
+    </section>
+
+    <!-- 3. 【結果発表 / リザルト画面】 -->
+    <section id="screen-result" class="hidden flex-1 flex flex-col items-center justify-center py-4 text-center">
+      <div class="bg-white border-2 border-purple-200 rounded-3xl p-6 sm:p-8 max-w-xl w-full shadow-xl">
+        <div id="result-badge" class="inline-block bg-amber-100 text-amber-800 text-xs sm:text-sm font-bold px-3 py-1 rounded-full mb-3">
+          🎉 全首完了！
+        </div>
+
+        <h2 id="result-title" class="text-2xl sm:text-4xl font-black text-slate-800 mb-2 font-mincho">
+          お見事！満願達成
+        </h2>
+        <p id="result-subtitle" class="text-xs sm:text-sm text-slate-600 mb-6">すべてのスマホ用語を取り終えました。</p>
+
+        <!-- スコア・スタッツ表 -->
+        <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6 bg-slate-50 p-4 rounded-2xl border border-slate-100 text-left">
+          <div class="p-2">
+            <span class="text-xs text-slate-400 block font-bold">クリアタイム</span>
+            <span id="res-time" class="text-xl sm:text-2xl font-black text-purple-600 font-mono">00:00.0</span>
+          </div>
+          <div class="p-2">
+            <span class="text-xs text-slate-400 block font-bold">あなたの獲得</span>
+            <span id="res-player-count" class="text-xl sm:text-2xl font-black text-slate-800">20 枚</span>
+          </div>
+          <div class="p-2 col-span-2 sm:col-span-1 border-t sm:border-t-0 sm:border-l border-slate-200">
+            <span class="text-xs text-slate-400 block font-bold">お手つき回数</span>
+            <span id="res-otetsuki" class="text-xl sm:text-2xl font-black text-amber-600">0 回</span>
+          </div>
+        </div>
+
+        <div class="flex flex-col sm:flex-row gap-3 justify-center mb-6">
+          <button id="res-retry-btn" class="w-full sm:w-auto px-6 py-3 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-sm shadow-md transition active:scale-95">
+            もう一度遊ぶ
+          </button>
+          <button id="res-show-review-btn" class="w-full sm:w-auto px-6 py-3 rounded-xl border-2 border-slate-200 hover:bg-slate-50 text-slate-700 font-bold text-sm transition">
+            札の解説一覧を見る
+          </button>
+          <button id="res-home-btn" class="w-full sm:w-auto px-6 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm transition">
+            タイトルへ
+          </button>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ================= FOOTER ================= -->
+  <footer class="py-2.5 text-center text-[11px] text-slate-400 border-t border-slate-100 bg-white/50">
+    スマホ最新用語かるた • 20組完全版 (Web Speech API & Web Audio API 実装)
+  </footer>
+
+  <!-- ================= MODAL: 用語図鑑・一覧 ================= -->
+  <div id="dict-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-6 hidden">
+    <div class="bg-white rounded-3xl max-w-2xl w-full max-h-[85vh] flex flex-col shadow-2xl overflow-hidden border border-purple-100">
+      <div class="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between bg-purple-50/50">
+        <div>
+          <h3 class="text-base sm:text-lg font-bold text-slate-800 flex items-center gap-2">
+            📖 収録スマホ用語（全20首）
+          </h3>
+          <p class="text-xs text-slate-500">ゲームに出てくる札の読み句と意味をチェックできます。</p>
+        </div>
+        <button id="close-dict-btn" class="w-8 h-8 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-700 flex items-center justify-center font-bold text-sm transition">
+          ✕
+        </button>
+      </div>
+
+      <div class="p-4 overflow-y-auto space-y-3 divide-y divide-slate-100" id="dict-list-container">
+        <!-- JSで20組の解説リストを展開 -->
+      </div>
+
+      <div class="p-3 border-t border-slate-100 text-center bg-slate-50">
+        <button id="close-dict-bottom-btn" class="px-6 py-2 rounded-xl bg-purple-600 text-white font-bold text-xs sm:text-sm hover:bg-purple-700 transition">
+          閉じてゲームへ戻る
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= JAVASCRIPT: LOGIC & ASSETS ================= -->
+  <script>
+    /* =====================================================================
+       1. かるたデータ（スマホ最新用語 20選）
+       ===================================================================== */
+    const KARUTA_DATA = [
+      {
+        id: 'ai',
+        char: 'え',
+        term: '生成AI',
+        phrase: 'AIが 質問・写真も 即つくる',
+        desc: '文章や画像・要約などを指示するだけで瞬時に生み出す最新人工知能。',
+        svg: `<svg viewBox="0 0 48 48" fill="none" stroke="#7c3aed" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M24 4 C24 16 28 20 40 24 C28 28 24 32 24 44 C24 32 20 28 8 24 C20 20 24 16 24 4 Z" fill="#ede9fe"></path>
+          <path d="M37 6 C37 10 39 12 43 13 C39 14 37 16 37 20 C37 16 35 14 31 13 C35 12 37 10 37 6 Z" fill="#7c3aed"></path>
+        </svg>`
+      },
+      {
+        id: 'auth2',
+        char: 'に',
+        term: '二段階認証',
+        phrase: '二重の鍵 番号届いて 安全確認',
+        desc: 'パスワードに加えてスマホに届くSMS認証コード等を入力して不正ログインを防ぐ仕組み。',
+        svg: `<svg viewBox="0 0 48 48" fill="none" stroke="#7c3aed" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M24 6 L38 12 V22 C38 32 24 40 24 40 C24 40 10 32 10 22 V12 Z" fill="#ede9fe"></path>
+          <rect x="18" y="18" width="12" height="10" rx="2" fill="#7c3aed"></rect>
+          <path d="M21 18 V15 A3 3 0 0 1 27 15 V18"></path>
+          <circle cx="24" cy="33" r="2" fill="#7c3aed"></circle>
+        </svg>`
+      },
+      {
+        id: 'esim',
+        char: 'い',
+        term: 'eSIM',
+        phrase: '入れ替え無用 ネットで契約 すぐ通信',
+        desc: '本体内部に組み込まれたデジタルSIM。カードを差し替えずに最短数分で回線を開通できます。',
+        svg: `<svg viewBox="0 0 48 48" fill="none" stroke="#7c3aed" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="12" y="10" width="24" height="28" rx="4" fill="#ede9fe"></rect>
+          <rect x="18" y="16" width="12" height="16" rx="2" stroke-width="2" fill="#ffffff"></rect>
+          <line x1="24" y1="16" x2="24" y2="32"></line>
+          <line x1="18" y1="24" x2="30" y2="24"></line>
+          <path d="M28 8 L32 4 M36 12 L40 10 M38 18 L42 20" stroke="#7c3aed" stroke-width="2"></path>
+        </svg>`
+      },
+      {
+        id: 'airdrop',
+        char: 'あ',
+        term: 'AirDrop / 共有',
+        phrase: 'AirDrop 隣の友へと ポンと飛ぶ',
+        desc: 'Wi-FiやBluetoothを利用し、近くにいる相手と連絡先交換なしに写真やURLを高速送受信できる機能。',
+        svg: `<svg viewBox="0 0 48 48" fill="none" stroke="#7c3aed" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 28 A16 16 0 0 1 36 28"></path>
+          <path d="M16 32 A10 10 0 0 1 32 32"></path>
+          <circle cx="24" cy="36" r="3" fill="#7c3aed"></circle>
+          <path d="M24 8 V24 M18 14 L24 8 L30 14" stroke-width="3"></path>
+        </svg>`
+      },
+      {
+        id: 'widget',
+        char: 'う',
+        term: 'ウィジェット',
+        phrase: 'ウィンドウに 天気や予定が すぐ並ぶ',
+        desc: 'ホーム画面に直接配置できる小型パーツ。アプリを開かずに天気やカレンダーを確認可能。',
+        svg: `<svg viewBox="0 0 48 48" fill="none" stroke="#7c3aed" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="8" y="8" width="32" height="14" rx="4" fill="#ede9fe"></rect>
+          <circle cx="16" cy="15" r="3" fill="#7c3aed"></circle>
+          <line x1="24" y1="13" x2="34" y2="13"></line>
+          <line x1="24" y1="17" x2="30" y2="17"></line>
+          <rect x="8" y="26" width="14" height="14" rx="4" fill="#ffffff"></rect>
+          <rect x="26" y="26" width="14" height="14" rx="4" fill="#ffffff"></rect>
+        </svg>`
+      },
+      {
+        id: 'qr',
+        char: 'き',
+        term: 'QR決済',
+        phrase: 'キャッシュレス 画面をピッと お買い物',
+        desc: 'スマホの画面にバーコードやQRコードを表示して支払う電子決済サービス。',
+        svg: `<svg viewBox="0 0 48 48" fill="none" stroke="#7c3aed" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="8" y="8" width="12" height="12" fill="#ede9fe" stroke-width="2.5"></rect>
+          <rect x="11" y="11" width="6" height="6" fill="#7c3aed"></rect>
+          <rect x="28" y="8" width="12" height="12" fill="#ede9fe" stroke-width="2.5"></rect>
+          <rect x="31" y="11" width="6" height="6" fill="#7c3aed"></rect>
+          <rect x="8" y="28" width="12" height="12" fill="#ede9fe" stroke-width="2.5"></rect>
+          <rect x="11" y="31" width="6" height="6" fill="#7c3aed"></rect>
+          <line x1="28" y1="28" x2="40" y2="28"></line>
+          <line x1="40" y1="28" x2="40" y2="40"></line>
+          <rect x="30" y="34" width="4" height="4" fill="#7c3aed"></rect>
+        </svg>`
+      },
+      {
+        id: 'subsc',
+        char: 'さ',
+        term: 'サブスク',
+        phrase: 'サブスクで 音楽・映画 見放題',
+        desc: '定額料金を支払うことで、一定期間音楽・動画・アプリなどのサービスを自由に利用できる仕組み。',
+        svg: `<svg viewBox="0 0 48 48" fill="none" stroke="#7c3aed" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M38 20 A15 15 0 0 1 24 38 A15 15 0 0 1 10 24 A15 15 0 0 1 36 14"></path>
+          <polyline points="38,8 38,16 30,16"></polyline>
+          <rect x="18" y="16" width="12" height="12" rx="2" fill="#ede9fe"></rect>
+          <line x1="18" y1="20" x2="30" y2="20"></line>
+        </svg>`
+      },
+      {
+        id: 'cloud',
+        char: 'く',
+        term: 'クラウド同期',
+        phrase: 'クラウドへ 大事な思い出 預けとく',
+        desc: '写真や書類データをインターネット上の保管庫へ自動的にバックアップ・共有する機能。',
+        svg: `<svg viewBox="0 0 48 48" fill="none" stroke="#7c3aed" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M14 36 A10 10 0 0 1 12 18 A14 14 0 0 1 36 16 A9 9 0 0 1 40 32 A8 8 0 0 1 34 36 Z" fill="#ede9fe"></path>
+          <path d="M24 22 V32 M20 26 L24 22 L28 26" stroke-width="3"></path>
+        </svg>`
+      },
+      {
+        id: 'tether',
+        char: 'て',
+        term: 'テザリング',
+        phrase: 'テザリング スマホが電波の 発信源',
+        desc: 'スマホ本体をWi-Fi親機として使い、外出先でもパソコンやタブレットをネットにつなげる技。',
+        svg: `<svg viewBox="0 0 48 48" fill="none" stroke="#7c3aed" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="8" y="16" width="14" height="24" rx="2" fill="#ede9fe"></rect>
+          <path d="M26 24 C30 20 34 20 38 24"></path>
+          <path d="M24 18 C32 12 38 12 44 18"></path>
+          <circle cx="25" cy="28" r="2.5" fill="#7c3aed"></circle>
+        </svg>`
+      },
+      {
+        id: 'cache',
+        char: 'き',
+        term: 'キャッシュ消去',
+        phrase: 'きれいに消す 一時データで 動き軽快',
+        desc: '一度開いたページの表示を速くする一時保存データ。溜まりすぎると重くなるため定期消去が有効。',
+        svg: `<svg viewBox="0 0 48 48" fill="none" stroke="#7c3aed" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M8 16 H40 L36 38 H12 Z" fill="#ede9fe"></path>
+          <line x1="6" y1="16" x2="42" y2="16"></line>
+          <path d="M20 16 V10 H28 V16"></path>
+          <line x1="20" y1="22" x2="28" y2="30"></line>
+          <line x1="28" y1="22" x2="20" y2="30"></line>
+        </svg>`
+      },
+      {
+        id: 'dark',
+        char: 'だ',
+        term: 'ダークモード',
+        phrase: 'ダーク調 黒い画面で 目に優しく',
+        desc: '画面の背景を黒基調にする表示モード。夜間の目の疲れを和らげ、有機EL画面の節電にも役立ちます。',
+        svg: `<svg viewBox="0 0 48 48" fill="none" stroke="#7c3aed" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="24" cy="24" r="16" fill="#ede9fe"></circle>
+          <path d="M24 8 A16 16 0 0 1 24 40 Z" fill="#7c3aed"></path>
+          <line x1="24" y1="6" x2="24" y2="42" stroke-width="2.8"></line>
+        </svg>`
+      },
+      {
+        id: 'faceid',
+        char: 'か',
+        term: '顔・生体認証',
+        phrase: '顔向けて 見つめるだけで ロック解く',
+        desc: '指紋や顔の立体情報をカメラ・センサーで識別し、一瞬で安全にロックを解除する最新セキュリティ。',
+        svg: `<svg viewBox="0 0 48 48" fill="none" stroke="#7c3aed" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M10 16 V10 H16 M32 10 H38 V16 M10 32 V38 H16 M32 38 H38 V32" stroke-width="3.2"></path>
+          <circle cx="24" cy="22" r="8" fill="#ede9fe"></circle>
+          <circle cx="21" cy="21" r="1.5" fill="#7c3aed"></circle>
+          <circle cx="27" cy="21" r="1.5" fill="#7c3aed"></circle>
+          <path d="M21 25 Q24 28 27 25"></path>
+          <path d="M18 36 C18 31 30 31 30 36"></path>
+        </svg>`
+      },
+      {
+        id: 'notify',
+        char: 'つ',
+        term: 'プッシュ通知',
+        phrase: '通知来て ピコンと知らせる 新着情報',
+        desc: 'アプリを起動していなくても、メッセージやニュースの更新を即座に画面へポップアップする機能。',
+        svg: `<svg viewBox="0 0 48 48" fill="none" stroke="#7c3aed" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M24 8 A10 10 0 0 0 14 18 V28 L10 34 H38 L34 28 V18 A10 10 0 0 0 24 8 Z" fill="#ede9fe"></path>
+          <circle cx="24" cy="40" r="3" fill="#7c3aed"></circle>
+          <circle cx="36" cy="12" r="4" fill="#ef4444" stroke="#ffffff" stroke-width="2"></circle>
+        </svg>`
+      },
+      {
+        id: 'gps',
+        char: 'ま',
+        term: '位置情報 (GPS)',
+        phrase: 'マップ見て 今いる場所を ピンポイント',
+        desc: '衛星からの電波で現在地を測り、地図案内やデリバリー配達を可能にする機能。',
+        svg: `<svg viewBox="0 0 48 48" fill="none" stroke="#7c3aed" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M24 6 C16 6 10 12 10 20 C10 30 24 42 24 42 C24 42 38 30 38 20 C38 12 32 6 24 6 Z" fill="#ede9fe"></path>
+          <circle cx="24" cy="20" r="5" fill="#7c3aed"></circle>
+        </svg>`
+      },
+      {
+        id: 'flick',
+        char: 'は',
+        term: 'フリック入力',
+        phrase: '払う指 スワイプ・フリック 軽快に',
+        desc: '画面のキーを上下左右にはじいて素早く日本語を打ち込む、スマホならではの高速入力技。',
+        svg: `<svg viewBox="0 0 48 48" fill="none" stroke="#7c3aed" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="12" y="8" width="24" height="32" rx="4" fill="#ede9fe"></rect>
+          <line x1="16" y1="24" x2="32" y2="24" stroke-width="3.5"></line>
+          <polyline points="26,18 32,24 26,30" stroke-width="3.5"></polyline>
+        </svg>`
+      },
+      {
+        id: 'rec',
+        char: 'ろ',
+        term: '画面収録 (録画)',
+        phrase: '録画して 画面の動きを そのままビデオ',
+        desc: 'スマホに映っているゲームや操作手順をそのまま動画ファイルとして保存できる機能。',
+        svg: `<svg viewBox="0 0 48 48" fill="none" stroke="#7c3aed" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="24" cy="24" r="16" fill="#ede9fe"></circle>
+          <circle cx="24" cy="24" r="7" fill="#ef4444" stroke="#ef4444"></circle>
+        </svg>`
+      },
+      {
+        id: 'backup',
+        char: 'ほ',
+        term: 'バックアップ',
+        phrase: '保存して 故障・紛失 備えあり',
+        desc: 'スマホが壊れたり機種変更したときに備え、写真や連絡先を別の場所へ丸ごと複製しておくこと。',
+        svg: `<svg viewBox="0 0 48 48" fill="none" stroke="#7c3aed" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 28 A12 12 0 1 1 36 28" stroke-dasharray="3 3"></path>
+          <path d="M24 16 V32 M18 26 L24 32 L30 26" stroke-width="3"></path>
+          <line x1="12" y1="40" x2="36" y2="40" stroke-width="3"></line>
+        </svg>`
+      },
+      {
+        id: 'lowbat',
+        char: 'せ',
+        term: '低電力モード',
+        phrase: '節電で ピンチの充電 長持ちだ',
+        desc: '画面の明るさや裏側の通信を一時的に抑え、バッテリー切れの危機を延命する機能。',
+        svg: `<svg viewBox="0 0 48 48" fill="none" stroke="#7c3aed" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="8" y="14" width="30" height="20" rx="3" fill="#ede9fe"></rect>
+          <path d="M38 20 V28" stroke-width="3"></path>
+          <polygon points="22,18 16,26 22,26 20,31 26,23 21,23" fill="#eab308" stroke="#ca8a04"></polygon>
+        </svg>`
+      },
+      {
+        id: 'update',
+        char: 'し',
+        term: 'アプリアップデート',
+        phrase: 'システムを 最新機能へ 更新だ',
+        desc: 'アプリやOSの不具合を修正し、最新の便利機能や強固な安全対策を受け取る定期更新。',
+        svg: `<svg viewBox="0 0 48 48" fill="none" stroke="#7c3aed" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M38 24 A14 14 0 1 1 34 14"></path>
+          <polyline points="34,6 34,14 26,14"></polyline>
+          <path d="M24 20 V30 M19 25 L24 20 L29 25" stroke-width="3"></path>
+        </svg>`
+      },
+      {
+        id: 'giga',
+        char: 'ぎ',
+        term: 'ギガ消費 (通信量)',
+        phrase: 'ギガ減った 動画の見過ぎで 低速に',
+        desc: '毎月の契約で定められたデータ通信枠。使い果たすと速度制限がかかり表示が遅くなります。',
+        svg: `<svg viewBox="0 0 48 48" fill="none" stroke="#7c3aed" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 34 A16 16 0 1 1 36 34" stroke-width="3"></path>
+          <line x1="24" y1="26" x2="32" y2="16" stroke="#7c3aed" stroke-width="3.5"></line>
+          <circle cx="24" cy="26" r="3" fill="#7c3aed"></circle>
+          <text x="24" y="42" text-anchor="middle" font-size="9" font-weight="900" fill="#7c3aed" stroke="none">GB</text>
+        </svg>`
+      }
+    ];
+
+    /* =====================================================================
+       2. Web Audio API 音響ジェネレータ（外部音源URL不要の自立実装）
+       ===================================================================== */
+    let audioCtx = null;
+    let isSeEnabled = true;
+
+    function initAudio() {
+      if (!audioCtx) {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        audioCtx = new AudioContext();
+      }
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+    }
+
+    // 正解ピンポン音
+    function playCorrectSound() {
+      if (!isSeEnabled) return;
+      initAudio();
+      const now = audioCtx.currentTime;
+      
+      // 第1音（高音）
+      const osc1 = audioCtx.createOscillator();
+      const gain1 = audioCtx.createGain();
+      osc1.type = 'sine';
+      osc1.frequency.setValueAtTime(880, now); // A5
+      gain1.gain.setValueAtTime(0.25, now);
+      gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+      osc1.connect(gain1);
+      gain1.connect(audioCtx.destination);
+      osc1.start(now);
+      osc1.stop(now + 0.35);
+
+      // 第2音（さらに高音）
+      const osc2 = audioCtx.createOscillator();
+      const gain2 = audioCtx.createGain();
+      osc2.type = 'sine';
+      osc2.frequency.setValueAtTime(1318.5, now + 0.12); // E6
+      gain2.gain.setValueAtTime(0.28, now + 0.12);
+      gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
+      osc2.connect(gain2);
+      gain2.connect(audioCtx.destination);
+      osc2.start(now + 0.12);
+      osc2.stop(now + 0.55);
+    }
+
+    // お手つきブブー音
+    function playWrongSound() {
+      if (!isSeEnabled) return;
+      initAudio();
+      const now = audioCtx.currentTime;
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(160, now);
+      osc.frequency.setValueAtTime(130, now + 0.15);
+      gain.gain.setValueAtTime(0.2, now);
+      gain.gain.exponentialRampToValueAtTime(0.01, now + 0.35);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start(now);
+      osc.stop(now + 0.35);
+    }
+
+    // 札タップ/めくり音
+    function playCardTapSound() {
+      if (!isSeEnabled) return;
+      initAudio();
+      const now = audioCtx.currentTime;
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(440, now);
+      osc.frequency.exponentialRampToValueAtTime(220, now + 0.08);
+      gain.gain.setValueAtTime(0.15, now);
+      gain.gain.exponentialRampToValueAtTime(0.01, now + 0.08);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start(now);
+      osc.stop(now + 0.08);
+    }
+
+    // ファンファーレ（ゲームクリア時）
+    function playFanfareSound() {
+      if (!isSeEnabled) return;
+      initAudio();
+      const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
+      notes.forEach((freq, i) => {
+        const now = audioCtx.currentTime + i * 0.12;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(freq, now);
+        gain.gain.setValueAtTime(0.22, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start(now);
+        osc.stop(now + 0.5);
+      });
+    }
+
+    /* =====================================================================
+       3. Web Speech API 日本語合成音声読み上げ
+       ===================================================================== */
+    let isVoiceEnabled = true;
+    let synth = window.speechSynthesis;
+    let selectedVoice = null;
+
+    function initVoices() {
+      if (!synth) return;
+      const voices = synth.getVoices();
+      // 日本語の自然な音声（Google 日本語 / Kyoko / Otoya / Microsoft 等）を探索
+      selectedVoice = voices.find(v => v.lang.includes('ja') || v.lang.includes('JP')) || null;
+    }
+    if (synth) {
+      synth.onvoiceschanged = initVoices;
+      initVoices();
+    }
+
+    function speakPhrase(text, onEndCallback) {
+      if (!synth) {
+        if (onEndCallback) onEndCallback();
+        return;
+      }
+      synth.cancel(); // 既存の読み上げを停止
+
+      if (!isVoiceEnabled) {
+        if (onEndCallback) setTimeout(onEndCallback, 2000);
+        return;
+      }
+
+      const utter = new SpeechSynthesisUtterance(text);
+      utter.lang = 'ja-JP';
+      utter.rate = 0.95; // 落ち着いて聞き取りやすいスピード
+      utter.pitch = 1.05;
+      if (selectedVoice) utter.voice = selectedVoice;
+
+      utter.onend = () => {
+        if (onEndCallback) onEndCallback();
+      };
+      utter.onerror = () => {
+        if (onEndCallback) onEndCallback();
+      };
+
+      synth.speak(utter);
+    }
+
+    /* =====================================================================
+       4. ゲーム状態管理
+       ===================================================================== */
+    let gameMode = 'solo'; // 'solo' または 'cpu'
+    let cpuDifficulty = 'normal'; // 'easy', 'normal', 'hard'
+    let remainingCards = [];
+    let currentTarget = null;
+    let playerScore = 0;
+    let cpuScore = 0;
+    let wrongCount = 0;
+    let startTime = null;
+    let timerInterval = null;
+    let cpuTimer = null;
+    let isQuestionActive = false;
+
+    // DOM要素
+    const screenTitle = document.getElementById('screen-title');
+    const screenGame = document.getElementById('screen-game');
+    const screenResult = document.getElementById('screen-result');
+    const boardGrid = document.getElementById('board-grid');
+    const yomiTextEl = document.getElementById('yomi-text');
+    const yomiInitialBadge = document.getElementById('yomi-initial-badge');
+    const yomiProgressBar = document.getElementById('yomi-progress');
+    const statRemainEl = document.getElementById('stat-remain');
+    const statTimerEl = document.getElementById('stat-timer');
+    const statPlayerScoreEl = document.getElementById('stat-player-score');
+    const statCpuScoreEl = document.getElementById('stat-cpu-score');
+    const gameMessageEl = document.getElementById('game-message');
+
+    // モーダル要素
+    const dictModal = document.getElementById('dict-modal');
+    const dictListContainer = document.getElementById('dict-list-container');
+
+    /* =====================================================================
+       5. 画面切り替えと図鑑の生成
+       ===================================================================== */
+    function showScreen(screen) {
+      screenTitle.classList.add('hidden');
+      screenGame.classList.add('hidden');
+      screenResult.classList.add('hidden');
+      screen.classList.remove('hidden');
+    }
+
+    // 図鑑モーダルに全20首を生成
+    function populateDictionary() {
+      dictListContainer.innerHTML = '';
+      KARUTA_DATA.forEach((item, index) => {
+        const row = document.createElement('div');
+        row.className = 'pt-3 first:pt-0 flex items-start gap-3';
+        row.innerHTML = `
+          <div class="w-10 h-10 rounded-full bg-purple-100 text-purple-700 font-black flex-shrink-0 flex items-center justify-center text-lg border border-purple-200">
+            ${item.char}
+          </div>
+          <div class="flex-1">
+            <div class="flex items-baseline gap-2 mb-0.5">
+              <span class="font-bold text-slate-900 text-sm sm:text-base">${item.term}</span>
+              <span class="text-[11px] text-purple-600 font-bold bg-purple-50 px-2 py-0.5 rounded-full">#${index + 1}</span>
+            </div>
+            <p class="text-xs sm:text-sm font-bold text-teal-800 font-mincho mb-1">「${item.phrase}」</p>
+            <p class="text-xs text-slate-500 leading-relaxed">${item.desc}</p>
+          </div>
+        `;
+        dictListContainer.appendChild(row);
+      });
+    }
+    populateDictionary();
+
+    /* =====================================================================
+       6. ゲーム開始ロジック
+       ===================================================================== */
+    function startGame(mode, difficulty = 'normal') {
+      initAudio();
+      gameMode = mode;
+      cpuDifficulty = difficulty;
+      playerScore = 0;
+      cpuScore = 0;
+      wrongCount = 0;
+      
+      // 20枚をシャッフル
+      remainingCards = [...KARUTA_DATA].sort(() => Math.random() - 0.5);
+
+      // UI表示の更新
+      statPlayerScoreEl.textContent = `あなた 0枚`;
+      if (gameMode === 'cpu') {
+        statCpuScoreEl.classList.remove('hidden');
+        statCpuScoreEl.textContent = `/ CPU 0枚`;
+      } else {
+        statCpuScoreEl.classList.add('hidden');
+      }
+
+      // ボード上に20枚の札をランダム順で配置
+      renderBoard();
+
+      // タイマースタート
+      startTime = Date.now();
+      if (timerInterval) clearInterval(timerInterval);
+      timerInterval = setInterval(updateTimerDisplay, 50);
+
+      showScreen(screenGame);
+
+      // 最初の読み札を開始
+      setTimeout(nextQuestion, 600);
+    }
+
+    function renderBoard() {
+      boardGrid.innerHTML = '';
+      // 取り札は机の上に散らばるようにランダム順で並べる
+      const displayCards = [...KARUTA_DATA].sort(() => Math.random() - 0.5);
+
+      displayCards.forEach(card => {
+        const cardEl = document.createElement('div');
+        cardEl.id = `card-${card.id}`;
+        cardEl.className = 'karuta-card bg-white border-2 border-purple-300 rounded-xl p-1.5 sm:p-2.5 flex flex-col justify-between cursor-pointer';
+        
+        cardEl.innerHTML = `
+          <!-- 上部: 頭文字サークル -->
+          <div class="flex items-center justify-between">
+            <span class="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-purple-600 text-white font-black flex items-center justify-center text-xs sm:text-base shadow-sm">
+              ${card.char}
+            </span>
+            <span class="text-[9px] sm:text-[10px] font-bold text-purple-600 bg-purple-50 px-1 rounded border border-purple-200">
+              最新
+            </span>
+          </div>
+
+          <!-- 中央: SVGイラストアイコン -->
+          <div class="flex-1 flex items-center justify-center my-1 p-1">
+            <div class="w-10 h-10 sm:w-14 sm:h-14 flex items-center justify-center">
+              ${card.svg}
+            </div>
+          </div>
+
+          <!-- 下部: 用語名バー -->
+          <div class="bg-purple-600 text-white text-center py-1 px-1 rounded-md">
+            <span class="text-[10px] sm:text-xs font-black tracking-tight block truncate">${card.term}</span>
+          </div>
+        `;
+
+        cardEl.addEventListener('click', () => onCardClicked(card.id));
+        boardGrid.appendChild(cardEl);
+      });
+    }
+
+    function updateTimerDisplay() {
+      const elapsed = Date.now() - startTime;
+      const mins = Math.floor(elapsed / 60000);
+      const secs = Math.floor((elapsed % 60000) / 1000);
+      const millis = Math.floor((elapsed % 1000) / 100);
+      statTimerEl.textContent = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}.${millis}`;
+    }
+
+    /* =====================================================================
+       7. 読み札とCPUの行動
+       ===================================================================== */
+    function nextQuestion() {
+      if (remainingCards.length === 0) {
+        endGame();
+        return;
+      }
+
+      // 次の出題対象を取得
+      currentTarget = remainingCards.pop();
+      statRemainEl.textContent = remainingCards.length + 1;
+      isQuestionActive = true;
+
+      // 読み札表示のリセット
+      yomiInitialBadge.textContent = '？';
+      yomiTextEl.textContent = '……（読み上げ中）';
+      yomiProgressBar.style.width = '0%';
+
+      // 進行バーのアニメーション
+      setTimeout(() => {
+        yomiProgressBar.style.width = '100%';
+      }, 50);
+
+      // 音声読み上げの実行
+      const readText = `${currentTarget.phrase}。${currentTarget.term}`;
+      speakPhrase(readText, () => {
+        // 読み終えたら頭文字とテキストをフル公開
+        yomiInitialBadge.textContent = currentTarget.char;
+        yomiTextEl.textContent = `「${currentTarget.phrase}」`;
+      });
+
+      // CPU対戦モードの場合、難易度に応じたタイマーを作動
+      if (gameMode === 'cpu') {
+        scheduleCpuAction();
+      }
+    }
+
+    function scheduleCpuAction() {
+      if (cpuTimer) clearTimeout(cpuTimer);
+
+      // 難易度によるCPU反応速度（ミリ秒）
+      let delay = 6000;
+      if (cpuDifficulty === 'easy') delay = 5000 + Math.random() * 3000;      // 5.0〜8.0秒
+      else if (cpuDifficulty === 'normal') delay = 3200 + Math.random() * 2000; // 3.2〜5.2秒
+      else if (cpuDifficulty === 'hard') delay = 1800 + Math.random() * 1400;   // 1.8〜3.2秒（俊足）
+
+      cpuTimer = setTimeout(() => {
+        if (!isQuestionActive) return;
+        // CPUが正解の札を奪取！
+        isQuestionActive = false;
+        cpuScore++;
+        statCpuScoreEl.textContent = `/ CPU ${cpuScore}枚`;
+        
+        playWrongSound(); // プレイヤーにとっては取られた音
+        showToast(`🤖 CPUに「${currentTarget.term}」を取られました！`, 'text-orange-600');
+
+        const targetCardEl = document.getElementById(`card-${currentTarget.id}`);
+        if (targetCardEl) {
+          targetCardEl.classList.add('card-cpu-take');
+          setTimeout(() => {
+            targetCardEl.classList.remove('card-cpu-take');
+            targetCardEl.classList.add('card-taken');
+            setTimeout(nextQuestion, 1000);
+          }, 600);
+        }
+      }, delay);
+    }
+
+    /* =====================================================================
+       8. プレイヤーのタップ・お手つき判定
+       ===================================================================== */
+    function onCardClicked(cardId) {
+      if (!isQuestionActive || !currentTarget) return;
+
+      const clickedEl = document.getElementById(`card-${cardId}`);
+      if (!clickedEl || clickedEl.classList.contains('card-taken')) return;
+
+      if (cardId === currentTarget.id) {
+        // 【正解！】
+        isQuestionActive = false;
+        if (cpuTimer) clearTimeout(cpuTimer);
+
+        playerScore++;
+        statPlayerScoreEl.textContent = `あなた ${playerScore}枚`;
+        playCorrectSound();
+        showToast(`✨ 正解！「${currentTarget.term}」を獲得！`, 'text-emerald-600');
+
+        clickedEl.classList.add('card-correct');
+        setTimeout(() => {
+          clickedEl.classList.remove('card-correct');
+          clickedEl.classList.add('card-taken');
+          setTimeout(nextQuestion, 800);
+        }, 500);
+
+      } else {
+        // 【お手つき！】
+        wrongCount++;
+        playWrongSound();
+        showToast(`❌ お手つき！ 探しているのは「${currentTarget.char}」の札です`, 'text-rose-600');
+
+        clickedEl.classList.add('card-wrong');
+        setTimeout(() => {
+          clickedEl.classList.remove('card-wrong');
+        }, 500);
+      }
+    }
+
+    function showToast(msg, colorClass = 'text-purple-800') {
+      gameMessageEl.textContent = msg;
+      gameMessageEl.className = `h-6 text-center text-xs sm:text-sm font-bold ${colorClass} transition-opacity duration-300 opacity-100 flex items-center justify-center`;
+      setTimeout(() => {
+        gameMessageEl.classList.remove('opacity-100');
+        gameMessageEl.classList.add('opacity-0');
+      }, 2500);
+    }
+
+    /* =====================================================================
+       9. ゲーム終了・リザルト発表
+       ===================================================================== */
+    function endGame() {
+      if (timerInterval) clearInterval(timerInterval);
+      if (cpuTimer) clearTimeout(cpuTimer);
+      if (synth) synth.cancel();
+
+      playFanfareSound();
+
+      const finalTime = statTimerEl.textContent;
+      document.getElementById('res-time').textContent = finalTime;
+      document.getElementById('res-player-count').textContent = `${playerScore} 枚`;
+      document.getElementById('res-otetsuki').textContent = `${wrongCount} 回`;
+
+      const resBadge = document.getElementById('result-badge');
+      const resTitle = document.getElementById('result-title');
+      const resSubtitle = document.getElementById('result-subtitle');
+
+      if (gameMode === 'solo') {
+        resBadge.textContent = '⏱️ タイムアタック完了！';
+        resTitle.textContent = wrongCount === 0 ? '完全制覇！かるた名人' : 'お見事！満願達成';
+        resSubtitle.textContent = `20枚すべてのスマホ最新用語を ${finalTime} で獲得しました！`;
+      } else {
+        if (playerScore > cpuScore) {
+          resBadge.textContent = '🏆 勝利！';
+          resTitle.textContent = `あなたの勝ち！（${playerScore} 対 ${cpuScore}）`;
+          resSubtitle.textContent = `CPU（${cpuDifficulty}）に見事競り勝ちました！素早い反応でした。`;
+        } else if (playerScore < cpuScore) {
+          resBadge.textContent = '🤖 惜敗...';
+          resTitle.textContent = `CPUの勝利！（${playerScore} 対 ${cpuScore}）`;
+          resSubtitle.textContent = `CPUに先手を取られてしまいました。再戦してリベンジしよう！`;
+        } else {
+          resBadge.textContent = '⚖️ 引き分け！';
+          resTitle.textContent = `同点ドロー！（${playerScore} 対 ${cpuScore}）`;
+          resSubtitle.textContent = `互角の熱戦でした！次こそは単独勝利を目指そう。`;
+        }
+      }
+
+      showScreen(screenResult);
+    }
+
+    /* =====================================================================
+       10. イベントリスナー各種
+       ===================================================================== */
+    // 一人プレイ開始
+    document.getElementById('start-solo-btn').addEventListener('click', () => {
+      startGame('solo');
+    });
+
+    // CPU対戦開始
+    document.querySelectorAll('.cpu-start-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const diff = e.currentTarget.dataset.diff;
+        startGame('cpu', diff);
+      });
+    });
+
+    // もう一度読み直すボタン
+    document.getElementById('repeat-voice-btn').addEventListener('click', () => {
+      if (!currentTarget) return;
+      playCardTapSound();
+      speakPhrase(`${currentTarget.phrase}。${currentTarget.term}`);
+    });
+
+    // タイトルへ戻るボタン
+    document.getElementById('header-menu-btn').addEventListener('click', () => {
+      if (timerInterval) clearInterval(timerInterval);
+      if (cpuTimer) clearTimeout(cpuTimer);
+      if (synth) synth.cancel();
+      showScreen(screenTitle);
+    });
+    document.getElementById('res-home-btn').addEventListener('click', () => {
+      showScreen(screenTitle);
+    });
+    document.getElementById('res-retry-btn').addEventListener('click', () => {
+      startGame(gameMode, cpuDifficulty);
+    });
+
+    // 音声ON/OFF切り替え
+    const toggleVoiceBtn = document.getElementById('toggle-voice-btn');
+    const voiceIcon = document.getElementById('voice-icon');
+    const voiceLabel = document.getElementById('voice-label');
+    toggleVoiceBtn.addEventListener('click', () => {
+      isVoiceEnabled = !isVoiceEnabled;
+      if (isVoiceEnabled) {
+        voiceIcon.textContent = '🔊';
+        voiceLabel.textContent = '音声 ON';
+        toggleVoiceBtn.classList.replace('bg-slate-200', 'bg-slate-50');
+      } else {
+        voiceIcon.textContent = '🔇';
+        voiceLabel.textContent = '音声 OFF';
+        toggleVoiceBtn.classList.replace('bg-slate-50', 'bg-slate-200');
+        if (synth) synth.cancel();
+      }
+    });
+
+    // 効果音ON/OFF切り替え
+    const toggleSeBtn = document.getElementById('toggle-se-btn');
+    const seIcon = document.getElementById('se-icon');
+    const seLabel = document.getElementById('se-label');
+    toggleSeBtn.addEventListener('click', () => {
+      isSeEnabled = !isSeEnabled;
+      if (isSeEnabled) {
+        seIcon.textContent = '🔔';
+        seLabel.textContent = 'SE ON';
+        toggleSeBtn.classList.replace('bg-slate-200', 'bg-slate-50');
+      } else {
+        seIcon.textContent = '🔕';
+        seLabel.textContent = 'SE OFF';
+        toggleSeBtn.classList.replace('bg-slate-50', 'bg-slate-200');
+      }
+    });
+
+    // 用語図鑑モーダル開閉
+    const openDictBtn = document.getElementById('open-dict-btn');
+    const closeDictBtn = document.getElementById('close-dict-btn');
+    const closeDictBottomBtn = document.getElementById('close-dict-bottom-btn');
+    const resShowReviewBtn = document.getElementById('res-show-review-btn');
+
+    openDictBtn.addEventListener('click', () => dictModal.classList.remove('hidden'));
+    resShowReviewBtn.addEventListener('click', () => dictModal.classList.remove('hidden'));
+    closeDictBtn.addEventListener('click', () => dictModal.classList.add('hidden'));
+    closeDictBottomBtn.addEventListener('click', () => dictModal.classList.add('hidden'));
+    dictModal.addEventListener('click', (e) => {
+      if (e.target === dictModal) dictModal.classList.add('hidden');
+    });
+
+  </script>
+</body>
+</html>
+
